@@ -1,8 +1,47 @@
 from langgraph.types import interrupt
 
 
+def _clean_text(value, fallback: str = "") -> str:
+    """Normalize text values received from state or interrupt payloads."""
+    if not isinstance(value, str):
+        return fallback
+    cleaned = value.strip()
+    return cleaned or fallback
+
+
+def _clean_options(options) -> list[str]:
+    """Clean select options while preserving order and uniqueness."""
+    cleaned_options: list[str] = []
+    for option in options or []:
+        if not isinstance(option, str):
+            continue
+        cleaned_option = option.strip()
+        if cleaned_option and cleaned_option not in cleaned_options:
+            cleaned_options.append(cleaned_option)
+    return cleaned_options
+
+
+def _clean_multi_answer(answer_value) -> list[str]:
+    """Normalize multi-select answers into a de-duplicated list of strings."""
+    if isinstance(answer_value, str):
+        candidates = [answer_value]
+    elif isinstance(answer_value, list):
+        candidates = answer_value
+    else:
+        candidates = []
+
+    cleaned_answers: list[str] = []
+    for answer in candidates:
+        if not isinstance(answer, str):
+            continue
+        cleaned_answer = answer.strip()
+        if cleaned_answer and cleaned_answer not in cleaned_answers:
+            cleaned_answers.append(cleaned_answer)
+    return cleaned_answers
+
+
 def collect_followup_answers(state: dict) -> dict:
-    """Pause for one MCQ follow-up answer and store it."""
+    """Pause for one follow-up answer and store it by question input type."""
     questions = state.get("followup_questions", [])
     if not isinstance(questions, list):
         raise ValueError("Follow-up questions must be a list.")
@@ -20,47 +59,96 @@ def collect_followup_answers(state: dict) -> dict:
     if not isinstance(question_item, dict):
         raise ValueError("Each follow-up question must be a dictionary.")
 
-    question = str(question_item.get("question") or "").strip()
-    options = question_item.get("options")
-    if not question or not isinstance(options, list):
-        raise ValueError("Each follow-up question must include a question and options.")
+    question = _clean_text(question_item.get("question"))
+    if not question:
+        raise ValueError("Each follow-up question must include a question.")
 
-    cleaned_options = []
-    for option in options:
-        if not isinstance(option, str):
-            continue
-        cleaned_option = option.strip()
-        if cleaned_option:
-            cleaned_options.append(cleaned_option)
+    input_type = _clean_text(question_item.get("input_type"), "single_select").lower()
+    why_this_matters = _clean_text(question_item.get("why_this_matters", ""))
 
-    if len(cleaned_options) < 3:
-        raise ValueError("Each MCQ follow-up question must include at least 3 options.")
+    if input_type in {"single_select", "multi_select"}:
+        cleaned_options = _clean_options(question_item.get("options"))
+        if len(cleaned_options) < 2:
+            raise ValueError("Select-type follow-up questions must include at least 2 options.")
 
-    answer = interrupt(
-        {
-            "type": "followup_question",
-            "question": question,
-            "options": cleaned_options[:4],
-            "current_index": current_index,
-            "total_questions": len(questions),
-        }
-    )
+        answer = interrupt(
+            {
+                "type": "followup_question",
+                "question": question,
+                "input_type": input_type,
+                "options": cleaned_options[:6],
+                "why_this_matters": why_this_matters,
+                "current_index": current_index,
+                "total_questions": len(questions),
+            }
+        )
 
-    if isinstance(answer, dict):
-        answer_text = str(answer.get("answer") or "").strip()
+        if isinstance(answer, dict):
+            answer_value = answer.get("answer")
+        else:
+            answer_value = answer
+
+        if input_type == "multi_select":
+            normalized_answer = _clean_multi_answer(answer_value)
+            if not normalized_answer:
+                normalized_answer = ["No specific preference."]
+            answers.append(
+                {
+                    "question": question,
+                    "input_type": input_type,
+                    "options": cleaned_options[:6],
+                    "answer": normalized_answer,
+                    "why_this_matters": why_this_matters,
+                }
+            )
+        else:
+            answer_text = _clean_text(answer_value)
+            if not answer_text:
+                answer_text = "No specific preference."
+            answers.append(
+                {
+                    "question": question,
+                    "input_type": input_type,
+                    "options": cleaned_options[:6],
+                    "answer": answer_text,
+                    "why_this_matters": why_this_matters,
+                }
+            )
+    elif input_type == "text":
+        placeholder = _clean_text(
+            question_item.get("placeholder"),
+            "Share your preference",
+        )
+        answer = interrupt(
+            {
+                "type": "followup_question",
+                "question": question,
+                "input_type": input_type,
+                "placeholder": placeholder,
+                "why_this_matters": why_this_matters,
+                "current_index": current_index,
+                "total_questions": len(questions),
+            }
+        )
+
+        if isinstance(answer, dict):
+            answer_text = _clean_text(answer.get("answer"))
+        else:
+            answer_text = _clean_text(answer)
+        if not answer_text:
+            answer_text = "No specific preference."
+
+        answers.append(
+            {
+                "question": question,
+                "input_type": input_type,
+                "placeholder": placeholder,
+                "answer": answer_text,
+                "why_this_matters": why_this_matters,
+            }
+        )
     else:
-        answer_text = str(answer or "").strip()
-
-    if not answer_text:
-        answer_text = "No specific preference."
-
-    answers.append(
-        {
-            "question": question,
-            "options": cleaned_options[:4],
-            "answer": answer_text,
-        }
-    )
+        raise ValueError(f"Unsupported follow-up question input_type: {input_type}")
 
     return {
         "current_followup_index": current_index + 1,

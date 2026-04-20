@@ -51,6 +51,19 @@ class CitationRef(TypedDict, total=False):
     note: str
 
 
+class ShortlistCard(TypedDict, total=False):
+    card_title: str
+    state_or_region: str
+    trip_feel: str
+    places_covered: list[str]
+    highlights: list[str]
+    best_for: str
+    pace: str
+    duration_fit: str
+    why_it_fits: str
+    estimated_price_range: str
+
+
 class ItineraryInput(TypedDict, total=False):
     trip_summary: dict[str, Any]
     destination_summary: dict[str, Any]
@@ -281,8 +294,8 @@ class TravelState(TypedDict, total=False):
     budget_mode: str
     budget_value: int
     shortlisted_destinations: list[dict[str, Any]]
-    explained_shortlisted_destinations: list[dict[str, Any]]
-    shortlist_cards: list[dict[str, Any]]
+    explained_shortlisted_destinations: list[ShortlistCard]
+    shortlist_cards: list[ShortlistCard]
     selected_destination: dict[str, Any]
     shortlist_decision: str
     user_hint: str

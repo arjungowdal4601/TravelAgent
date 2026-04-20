@@ -4,7 +4,6 @@ from langgraph.graph import END, START, StateGraph
 from schemas.travel_state import TravelState
 from nodes.ask_half_baked_plan import ask_half_baked_plan
 from nodes.await_shortlist_decision import await_shortlist_decision
-from nodes.call_build_final_brief import call_build_final_brief
 from nodes.call_destination_research import call_destination_research
 from nodes.call_destination_research_with_user_hint import (
     call_destination_research_with_user_hint,
@@ -14,6 +13,7 @@ from nodes.call_generate_contextual_destination_questions import (
 )
 from nodes.collect_custom_followup_input import collect_custom_followup_input
 from nodes.collect_followup_answers import collect_followup_answers
+from nodes.build_shortlist_cards import build_shortlist_cards
 from nodes.handoff_to_parent_graph import handoff_to_parent_graph
 from nodes.itinerary_agent import (
     aggregate_final_itinerary,
@@ -23,10 +23,6 @@ from nodes.itinerary_agent import (
     prepare_itinerary_input,
     render_clean_itinerary_markdown,
     show_separate_itinerary_view,
-)
-from nodes.merge_shortlist_cards import merge_shortlist_cards
-from nodes.parallel_explain_shortlisted_destinations import (
-    parallel_explain_shortlisted_destinations,
 )
 from nodes.review_followup_summary import review_followup_summary
 from nodes.research_agent import (
@@ -43,17 +39,12 @@ from nodes.routing import (
     route_research_validation,
     route_shortlist_decision,
 )
-from nodes.show_read_only_final_brief import show_read_only_final_brief
 
 
 def build_graph():
     graph = StateGraph(TravelState)
     graph.add_node("call_destination_research", call_destination_research)
-    graph.add_node(
-        "parallel_explain_shortlisted_destinations",
-        parallel_explain_shortlisted_destinations,
-    )
-    graph.add_node("merge_shortlist_cards", merge_shortlist_cards)
+    graph.add_node("build_shortlist_cards", build_shortlist_cards)
     graph.add_node("await_shortlist_decision", await_shortlist_decision)
     graph.add_node("ask_half_baked_plan", ask_half_baked_plan)
     graph.add_node(
@@ -67,8 +58,7 @@ def build_graph():
     graph.add_node("collect_followup_answers", collect_followup_answers)
     graph.add_node("collect_custom_followup_input", collect_custom_followup_input)
     graph.add_node("review_followup_summary", review_followup_summary)
-    graph.add_node("call_build_final_brief", call_build_final_brief)
-    graph.add_node("show_read_only_final_brief", show_read_only_final_brief)
+#--------------------------------------------------------------------------------
     graph.add_node("handoff_to_parent_graph", handoff_to_parent_graph)
     graph.add_node("normalize_research_input", normalize_research_input)
     graph.add_node("build_destination_research", build_destination_research)
@@ -85,15 +75,8 @@ def build_graph():
     graph.add_node("show_separate_itinerary_view", show_separate_itinerary_view)
 
     graph.add_edge(START, "call_destination_research")
-    graph.add_edge(
-        "call_destination_research",
-        "parallel_explain_shortlisted_destinations",
-    )
-    graph.add_edge(
-        "parallel_explain_shortlisted_destinations",
-        "merge_shortlist_cards",
-    )
-    graph.add_edge("merge_shortlist_cards", "await_shortlist_decision")
+    graph.add_edge("call_destination_research", "build_shortlist_cards")
+    graph.add_edge("build_shortlist_cards", "await_shortlist_decision")
     graph.add_conditional_edges(
         "await_shortlist_decision",
         route_shortlist_decision,
@@ -106,7 +89,7 @@ def build_graph():
     graph.add_edge("ask_half_baked_plan", "call_destination_research_with_user_hint")
     graph.add_edge(
         "call_destination_research_with_user_hint",
-        "parallel_explain_shortlisted_destinations",
+        "build_shortlist_cards",
     )
 
     graph.add_edge(
@@ -122,10 +105,8 @@ def build_graph():
         },
     )
     graph.add_edge("collect_custom_followup_input", "review_followup_summary")
-    graph.add_edge("review_followup_summary", "call_build_final_brief")
-    graph.add_edge("call_build_final_brief", "show_read_only_final_brief")
     graph.add_conditional_edges(
-        "show_read_only_final_brief",
+        "review_followup_summary",
         route_final_action,
         {
             "handoff_to_parent_graph": "handoff_to_parent_graph",

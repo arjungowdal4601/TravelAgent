@@ -8,7 +8,6 @@ from main import travel_graph
 from UI.components import (
     render_chat,
     render_custom_followup_input,
-    render_final_brief_actions,
     render_followup_question,
     render_followup_summary_review,
     render_half_baked_plan_input,
@@ -293,10 +292,8 @@ def _render_graph_interrupt(interrupt_payload: dict, location_map: dict[str, lis
         resume_payload = render_followup_question(interrupt_payload)
     elif interrupt_type == "custom_followup_input":
         resume_payload = render_custom_followup_input(interrupt_payload)
-    elif interrupt_type == "followup_summary":
+    elif interrupt_type in {"followup_summary", "followup_confirmation"}:
         resume_payload = render_followup_summary_review(interrupt_payload)
-    elif interrupt_type == "final_brief":
-        resume_payload = render_final_brief_actions(interrupt_payload)
     else:
         st.error(f"Unknown graph interrupt type: {interrupt_type}")
 
@@ -354,11 +351,6 @@ def _render_graph_completion(location_map: dict[str, list[str]]) -> None:
 
     if graph_state.get("information_curator_complete"):
         st.success("Information curator flow is complete. Research packet is being prepared.")
-        return
-
-    if graph_state.get("final_brief"):
-        st.subheader("Final Trip Brief")
-        st.markdown(graph_state["final_brief"])
         return
 
     st.write("Travel graph is complete.")

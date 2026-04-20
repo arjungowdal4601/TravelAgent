@@ -12,7 +12,13 @@ def render_selected_destination(card: dict) -> None:
     """Show the user's selected destination after clicking Select."""
     st.success("Destination selected.")
     with st.container(border=True):
-        st.subheader(card.get("state_or_region", "Selected Destination"))
+        st.subheader(card.get("card_title") or card.get("state_or_region", "Selected Destination"))
+        trip_feel = card.get("trip_feel", "")
+        if trip_feel:
+            st.caption(trip_feel)
+        pace = card.get("pace", "")
+        if pace:
+            st.caption(f"Pace: {pace.title()}")
         st.write("**Places Covered**")
         st.write(", ".join(card.get("places_covered", [])))
         st.write("**Estimated Price Range**")
@@ -84,23 +90,45 @@ def render_half_baked_plan_input(interrupt_payload: dict) -> dict | None:
 
 
 def render_followup_question(interrupt_payload: dict) -> dict | None:
-    """Render one MCQ follow-up question and return the selected option."""
+    """Render one follow-up question for single-select, multi-select, or text input."""
     current_index = int(interrupt_payload.get("current_index", 0))
     total_questions = int(interrupt_payload.get("total_questions", 1))
     question = interrupt_payload.get("question", "Tell me your preference.")
+    input_type = str(interrupt_payload.get("input_type", "single_select")).strip().lower()
     options = interrupt_payload.get("options", [])
+    placeholder = str(interrupt_payload.get("placeholder") or "Share your preference").strip()
 
     st.subheader(f"Follow-up question {current_index + 1} of {total_questions}")
     st.write(question)
 
-    if not options:
+    if input_type == "text":
+        answer = st.text_input(
+            "Your answer",
+            key=f"followup_answer_input_text_{current_index}",
+            placeholder=placeholder,
+        )
+        if st.button("Submit answer", key=f"submit_followup_answer_{current_index}", use_container_width=True):
+            return {"answer": answer}
+        return None
+
+    if not isinstance(options, list) or not options:
         st.error("No answer options are available for this question.")
+        return None
+
+    if input_type == "multi_select":
+        selected_answers = st.multiselect(
+            "Choose one or more options",
+            options,
+            key=f"followup_answer_input_multi_{current_index}",
+        )
+        if st.button("Submit answer", key=f"submit_followup_answer_{current_index}", use_container_width=True):
+            return {"answer": selected_answers}
         return None
 
     answer = st.radio(
         "Choose one option",
         options,
-        key=f"followup_answer_input_{current_index}",
+        key=f"followup_answer_input_single_{current_index}",
     )
 
     if st.button("Submit answer", key=f"submit_followup_answer_{current_index}", use_container_width=True):
@@ -130,31 +158,49 @@ def render_custom_followup_input(interrupt_payload: dict) -> dict | None:
 
 
 def render_followup_summary_review(interrupt_payload: dict) -> dict | None:
-    """Render the read-only follow-up summary and final comments box."""
-    st.markdown(interrupt_payload.get("summary", ""))
+    """Render final confirmation summary with optional correction and actions."""
+    destination = interrupt_payload.get("selected_destination") or {}
+    answers = interrupt_payload.get("followup_answers") or []
+    custom_note = interrupt_payload.get("followup_custom_note") or "No extra preference provided."
+
+    st.subheader("Review Your Preferences")
+    with st.container(border=True):
+        destination_title = destination.get("card_title") or destination.get("state_or_region", "Selected destination")
+        st.markdown(f"**Destination:** {destination_title}")
+        places = destination.get("places_covered") or []
+        if places:
+            st.caption("Places: " + ", ".join(str(place).strip() for place in places if str(place).strip()))
+
+        st.markdown("**Selected answers**")
+        if answers:
+            for answer in answers:
+                if not isinstance(answer, dict):
+                    continue
+                question = str(answer.get("question") or "Question").strip()
+                answer_value = answer.get("answer")
+                if isinstance(answer_value, list):
+                    answer_text = ", ".join(str(item).strip() for item in answer_value if str(item).strip())
+                else:
+                    answer_text = str(answer_value or "").strip()
+                answer_text = answer_text or "No preference selected"
+                st.write(f"- **{question}**: {answer_text}")
+        else:
+            st.write("- No follow-up answers captured.")
+
+        st.markdown("**Extra preference**")
+        st.write(str(custom_note).strip() or "No extra preference provided.")
 
     change_request = st.text_area(
-        interrupt_payload.get("question", "Any changes or comments before we build the final brief?"),
+        interrupt_payload.get("question", "Do you want to change anything mentioned here?"),
         key="followup_change_request_input",
-        placeholder="Add changes, corrections, or extra comments.",
+        placeholder="Add a final correction if needed.",
     )
 
-    if st.button("Build final brief", key="submit_followup_summary_review", use_container_width=True):
-        return {"followup_change_request": change_request}
-
-    return None
-
-
-def render_final_brief_actions(interrupt_payload: dict) -> dict | None:
-    """Render the final brief and return the chosen final action."""
-    st.subheader("Final Trip Brief")
-    st.markdown(interrupt_payload.get("final_brief", ""))
-
     left, right = st.columns(2)
-    if left.button("Continue to research and itinerary", key="continue_final_brief", use_container_width=True):
-        return {"action": "continue"}
-    if right.button("Start over", key="start_over_final_brief", use_container_width=True):
-        return {"action": "start_over"}
+    if left.button("Start research", key="start_research_confirmation", use_container_width=True):
+        return {"action": "continue", "followup_change_request": change_request}
+    if right.button("Start over", key="start_over_confirmation", use_container_width=True):
+        return {"action": "start_over", "followup_change_request": change_request}
 
     return None
 
@@ -178,7 +224,14 @@ def _render_bullets(values: list[str], limit: int = 4) -> None:
 def _render_destination_card(card: dict, index: int) -> bool:
     """Render one destination card and return True when selected."""
     with st.container(border=True):
-        st.markdown(f"### {_truncate_text(card.get('state_or_region', f'Destination {index + 1}'), 28)}")
+        title = card.get("card_title") or card.get("state_or_region", f"Destination {index + 1}")
+        st.markdown(f"### {_truncate_text(title, 36)}")
+        trip_feel = _truncate_text(card.get("trip_feel", ""), 62)
+        if trip_feel:
+            st.caption(trip_feel)
+        pace = _truncate_text(card.get("pace", ""), 18)
+        if pace:
+            st.caption(f"Pace: {pace.title()}")
         st.caption(f"Places: {_truncate_text(', '.join(card.get('places_covered', [])), 58)}")
         st.caption(f"Best For: {_truncate_text(card.get('best_for', ''), 42)}")
         st.caption(f"Duration: {_truncate_text(card.get('duration_fit', ''), 42)}")

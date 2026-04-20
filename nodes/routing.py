@@ -21,7 +21,7 @@ def route_followup_progress(state: dict) -> str:
 
 
 def route_final_action(state: dict) -> str:
-    """Route after the final brief action."""
+    """Route after the final confirmation action."""
     if state.get("final_action") == "continue":
         return "handoff_to_parent_graph"
     if state.get("final_action") == "start_over":
@@ -51,4 +51,3 @@ def route_itinerary_validation(state: dict) -> str:
     if validation.get("valid"):
         return "render_clean_itinerary_markdown"
     return END
-

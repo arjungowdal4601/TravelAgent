@@ -26,13 +26,15 @@ def normalize_research_input(state: dict) -> dict:
     if not isinstance(selected_destination, dict):
         raise ValueError("Selected destination is required before research.")
 
-    final_brief = _clean_text(state.get("final_brief"))
-    if not final_brief:
-        raise ValueError("Final brief is required before research.")
-
     followup_answers = _clean_followup_answers(state.get("followup_answers") or [])
     custom_note = _clean_text(state.get("followup_custom_note"))
     change_request = _clean_text(state.get("followup_change_request"))
+    curator_summary = _build_curator_summary(
+        selected_destination,
+        followup_answers,
+        custom_note,
+        change_request,
+    )
 
     research_input = {
         "destination": _format_destination(selected_destination),
@@ -54,12 +56,14 @@ def normalize_research_input(state: dict) -> dict:
         "interests": _infer_interests(selected_destination, followup_answers, custom_note, change_request),
         "pace": _infer_pace(followup_answers, custom_note, change_request),
         "preferences": {
-            "followup_answers": followup_answers[:5],
+            "followup_answers": followup_answers[:6],
             "custom_note": custom_note[:500],
             "change_request": change_request[:500],
         },
         "constraints": _infer_known_constraints(state, selected_destination, custom_note, change_request),
-        "final_brief": final_brief[:1800],
+        "curator_summary": curator_summary[:1800],
+        # Backward-compatible key retained for downstream consumers.
+        "final_brief": curator_summary[:1800],
     }
 
     return {"research_input": _strip_empty(research_input)}
@@ -529,7 +533,7 @@ def _clean_citations(values: Any) -> list[dict[str, str]]:
 
 def _infer_interests(
     selected_destination: dict[str, Any],
-    followup_answers: list[dict[str, str]],
+    followup_answers: list[dict[str, Any]],
     custom_note: str,
     change_request: str,
 ) -> list[str]:
@@ -537,7 +541,11 @@ def _infer_interests(
     values.extend(_clean_str_list(selected_destination.get("highlights") or []))
     values.extend(_clean_str_list(selected_destination.get("places_covered") or []))
     for answer in followup_answers:
-        values.append(answer.get("answer", ""))
+        answer_value = answer.get("answer", "")
+        if isinstance(answer_value, list):
+            values.extend(_clean_str_list(answer_value))
+        else:
+            values.append(answer_value)
     values.extend([custom_note, change_request])
 
     text = " ".join(_clean_str_list(values)).lower()
@@ -556,7 +564,7 @@ def _infer_interests(
     return interests or _clean_str_list(selected_destination.get("highlights") or [])[:4]
 
 
-def _infer_pace(followup_answers: list[dict[str, str]], custom_note: str, change_request: str) -> str:
+def _infer_pace(followup_answers: list[dict[str, Any]], custom_note: str, change_request: str) -> str:
     text = _to_json({"answers": followup_answers, "custom_note": custom_note, "change_request": change_request}).lower()
     if _contains_any(text, ["avoid overly packed", "not too packed", "avoid packed", "slow", "relaxed", "peaceful", "comfort", "easy"]):
         return "relaxed"
@@ -603,16 +611,63 @@ def _compact_destination(selected_destination: dict[str, Any]) -> dict[str, Any]
     }
 
 
-def _clean_followup_answers(values: list[Any]) -> list[dict[str, str]]:
+def _clean_followup_answers(values: list[Any]) -> list[dict[str, Any]]:
     answers = []
     for value in values:
         if not isinstance(value, dict):
             continue
         question = _clean_text(value.get("question"))
-        answer = _clean_text(value.get("answer"))
-        if question or answer:
-            answers.append({"question": question[:240], "answer": answer[:240]})
+        input_type = _clean_text(value.get("input_type"), "single_select")
+        raw_answer = value.get("answer")
+        if isinstance(raw_answer, list):
+            answer_list = _trim_str_list(raw_answer, limit=6, text_limit=120)
+            answer_value: str | list[str] = answer_list
+        else:
+            answer_value = _trim_text(raw_answer, 240)
+
+        has_answer = bool(answer_value) if isinstance(answer_value, list) else bool(_clean_text(answer_value))
+        if question or has_answer:
+            answers.append(
+                {
+                    "question": question[:240],
+                    "input_type": input_type[:32],
+                    "answer": answer_value,
+                }
+            )
     return answers
+
+
+def _build_curator_summary(
+    selected_destination: dict[str, Any],
+    followup_answers: list[dict[str, Any]],
+    custom_note: str,
+    change_request: str,
+) -> str:
+    """Build a compact deterministic curator summary for research handoff."""
+    region = _clean_text(selected_destination.get("state_or_region"), "Selected destination")
+    places = _clean_str_list(selected_destination.get("places_covered") or [])
+    destination_line = f"Destination: {region}"
+    if places:
+        destination_line += f" ({', '.join(places[:4])})"
+
+    lines = [destination_line]
+    if followup_answers:
+        lines.append("Follow-up preferences:")
+    for answer in followup_answers:
+        question = _clean_text(answer.get("question"))
+        answer_value = answer.get("answer")
+        if isinstance(answer_value, list):
+            answer_text = ", ".join(_clean_str_list(answer_value))
+        else:
+            answer_text = _clean_text(answer_value)
+        if question or answer_text:
+            lines.append(f"- {question}: {answer_text or 'No preference selected'}")
+    if custom_note:
+        lines.append(f"Extra preference: {custom_note}")
+    if change_request:
+        lines.append(f"Final correction: {change_request}")
+
+    return "\n".join(lines)
 
 
 def _trim_str_list(values: Any, *, limit: int, text_limit: int) -> list[str]:
@@ -721,4 +776,3 @@ def _require_dict(state: dict, key: str) -> dict[str, Any]:
 
 def _to_json(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True, default=str)
-
