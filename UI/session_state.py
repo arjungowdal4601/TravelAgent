@@ -73,6 +73,15 @@ def init_state(location_map: dict[str, list[str]]) -> None:
     if "graph_error" not in st.session_state:
         st.session_state.graph_error = None
 
+    if "graph_step_timings" not in st.session_state:
+        st.session_state.graph_step_timings = []
+
+    if "graph_total_seconds" not in st.session_state:
+        st.session_state.graph_total_seconds = None
+
+    if "graph_current_status" not in st.session_state:
+        st.session_state.graph_current_status = ""
+
     if "selected_destination" not in st.session_state:
         st.session_state.selected_destination = None
 
@@ -121,6 +130,9 @@ def reset_graph_results() -> None:
     st.session_state.selected_destination = None
     st.session_state.graph_thread_id = str(uuid4())
     st.session_state.view = "chat"
+    st.session_state.graph_step_timings = []
+    st.session_state.graph_total_seconds = None
+    st.session_state.graph_current_status = ""
 
 
 def reset_app_state(location_map: dict[str, list[str]]) -> None:

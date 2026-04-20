@@ -1,4 +1,4 @@
-import hashlib
+﻿import hashlib
 import json
 import os
 import time
@@ -7,18 +7,8 @@ from typing import Any
 
 
 CACHE_TTLS_SECONDS = {
-    "coverage": 30 * 24 * 60 * 60,
-    "weather": 6 * 60 * 60,
-    "documents": 60 * 60,
-    "packing": 7 * 24 * 60 * 60,
-    "money": 7 * 24 * 60 * 60,
-    "local_practicals": 7 * 24 * 60 * 60,
-    "safety": 7 * 24 * 60 * 60,
-    "connectivity": 7 * 24 * 60 * 60,
-    "local_transport": 7 * 24 * 60 * 60,
-    "medical": 7 * 24 * 60 * 60,
-    "cultural": 7 * 24 * 60 * 60,
-    "adventure": 7 * 24 * 60 * 60,
+    "destination_knowledge": 7 * 24 * 60 * 60,
+    "travel_essentials": 24 * 60 * 60,
 }
 
 

@@ -117,8 +117,29 @@ DESTINATION_RESEARCH_WITH_USER_HINT_SYSTEM_PROMPT = """
 You are an India travel destination shortlisting assistant.
 
 Your job is to shortlist exactly 4 destination groups from India only.
-Use the user's half-baked plan or trip feel as an important preference, but keep
-the suggestions practical for the full travel input.
+
+The user rejected the previous shortlist and then gave a custom hint. Treat that
+hint as the strongest signal for the next shortlist. Do not simply re-run the
+same broad India suggestions.
+
+Before choosing cards, silently interpret the hint as one or more of:
+- named destination or region
+- destination type
+- desired experience
+- climate or season preference
+- activity preference
+- budget or comfort signal
+
+Rules:
+- If the hint names a destination or region, stay focused on that destination,
+  that region, or very close semantic matches.
+- If the hint describes a travel feel, every card must share that feel.
+- Use the rejected shortlist as negative feedback.
+- Do not repeat rejected card titles, regions, or place clusters unless the hint
+  explicitly asks for that same idea.
+- Keep all suggestions practical for the full travel input.
+- The 4 cards should be variations inside the user's intent space, not generic
+  unrelated India suggestions.
 
 Do not ask follow-up questions.
 Do not generate an itinerary.
@@ -134,21 +155,36 @@ Use this travel input:
 User's half-baked plan or trip feel:
 {user_hint}
 
+Previously rejected shortlist summary:
+{rejected_shortlists}
+
+Current shortlist attempt number:
+{shortlist_attempt_count}
+
 Return exactly 4 destination groups in this JSON format:
 [
   {{
+    "card_title": "short attractive trip title",
     "state_or_region": "State or region name",
-    "places_covered": ["Place 1", "Place 2", "Place 3"],
-    "highlights": ["highlight 1", "highlight 2", "highlight 3"],
+    "trip_feel": "short mood line",
+    "places_covered": ["dynamic realistic place list"],
+    "highlights": ["dynamic short highlights"],
     "best_for": "short best-for line",
+    "pace": "relaxed | balanced | fast-paced",
     "duration_fit": "short duration-fit line",
     "why_it_fits": "short why-it-fits line",
-    "estimated_price_range": "short estimated trip budget range"
+    "estimated_price_range": "short estimated trip budget range",
+    "intent_match_reason": "short reason this card matches the user's custom hint",
+    "difference_from_rejected": "short reason this is meaningfully different from rejected cards"
   }}
 ]
 
 Keep all values short and card-friendly.
-`highlights` must have 3 to 5 items maximum.
+`places_covered`: usually 1 to 6 places depending on realism.
+`highlights`: 3 to 6 short items.
+Do not copy place names from rejected cards unless the custom hint explicitly points back to them.
+No markdown.
+No explanation outside JSON.
 """.strip()
 
 

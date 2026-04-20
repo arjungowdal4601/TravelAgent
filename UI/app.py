@@ -1,4 +1,5 @@
 from datetime import date
+import time
 from pathlib import Path
 
 import streamlit as st
@@ -26,6 +27,23 @@ from UI.session_state import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+GRAPH_STATUS_LABELS = {
+    "call_destination_research": "Finding destination matches",
+    "call_destination_research_with_user_hint": "Applying your custom preference",
+    "build_shortlist_cards": "Preparing destination cards",
+    "call_generate_contextual_destination_questions": "Preparing follow-up questions",
+    "normalize_research_input": "Preparing research brief",
+    "destination_knowledge_agent": "Researching selected destination",
+    "travel_essentials_agent": "Checking practical travel details",
+    "research_aggregator": "Merging travel research",
+    "validate_research_packet": "Validating research",
+    "prepare_itinerary_input": "Preparing itinerary context",
+    "itinerary_planner": "Choosing best route and building place-grounded day plan",
+    "render_clean_itinerary_markdown": "Rendering final report",
+    "show_separate_itinerary_view": "Opening itinerary report",
+}
 
 
 def run_app() -> None:
@@ -221,8 +239,7 @@ def _render_done_step(location_map: dict[str, list[str]]) -> None:
 
     try:
         if st.session_state.graph_state is None and st.session_state.graph_interrupt is None:
-            result = travel_graph.invoke(build_graph_input(), config=_graph_config())
-            _sync_graph_result(result)
+            _run_graph_with_status(build_graph_input())
         st.session_state.graph_error = None
     except Exception as exc:
         st.session_state.graph_error = f"Could not run travel graph: {exc}"
@@ -259,15 +276,71 @@ def _sync_graph_result(result: dict | None) -> None:
         interrupts = result.get("__interrupt__", [])
 
     if interrupts:
-        st.session_state.graph_interrupt = interrupts[0].value
+        first_interrupt = interrupts[0]
+        if isinstance(first_interrupt, dict) and "value" in first_interrupt:
+            st.session_state.graph_interrupt = first_interrupt["value"]
+        else:
+            st.session_state.graph_interrupt = getattr(first_interrupt, "value", first_interrupt)
     else:
         st.session_state.graph_interrupt = None
 
 
+def _run_graph_with_status(graph_input) -> None:
+    started_at = time.perf_counter()
+    task_starts: dict[str, tuple[str, float]] = {}
+    step_timings: list[dict] = []
+    interrupts = []
+
+    with st.status("Starting travel planning", expanded=True) as status:
+        for event in travel_graph.stream(graph_input, config=_graph_config(), stream_mode="debug"):
+            if not isinstance(event, dict):
+                continue
+            event_type = event.get("type")
+            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+
+            if event_type == "task":
+                task_id = str(payload.get("id") or "")
+                node_name = str(payload.get("name") or "")
+                label = _status_label(node_name)
+                if task_id:
+                    task_starts[task_id] = (node_name, time.perf_counter())
+                st.session_state.graph_current_status = label
+                status.update(label=label, state="running")
+
+            elif event_type == "task_result":
+                task_id = str(payload.get("id") or "")
+                node_name = str(payload.get("name") or "")
+                started = task_starts.pop(task_id, (node_name, time.perf_counter()))
+                elapsed = max(time.perf_counter() - started[1], 0)
+                label = _status_label(node_name or started[0])
+                step_timings.append(
+                    {
+                        "node": node_name or started[0],
+                        "label": label,
+                        "seconds": elapsed,
+                    }
+                )
+                st.write(f"{label} completed in {elapsed:.1f}s")
+                result_interrupts = payload.get("interrupts") or []
+                if result_interrupts:
+                    interrupts.extend(result_interrupts)
+
+        total_seconds = max(time.perf_counter() - started_at, 0)
+        st.session_state.graph_step_timings = step_timings
+        st.session_state.graph_total_seconds = total_seconds
+        st.session_state.graph_current_status = ""
+        status.update(label=f"Planning step finished in {total_seconds:.1f}s", state="complete")
+
+    _sync_graph_result({"__interrupt__": interrupts} if interrupts else None)
+
+
+def _status_label(node_name: str) -> str:
+    return GRAPH_STATUS_LABELS.get(node_name, node_name.replace("_", " ").title() if node_name else "Working")
+
+
 def _resume_graph(payload: dict, location_map: dict[str, list[str]]) -> None:
     try:
-        result = travel_graph.invoke(Command(resume=payload), config=_graph_config())
-        _sync_graph_result(result)
+        _run_graph_with_status(Command(resume=payload))
         st.session_state.graph_error = None
     except Exception as exc:
         st.session_state.graph_error = f"Could not resume travel graph: {exc}"
@@ -309,7 +382,11 @@ def _render_graph_completion(location_map: dict[str, list[str]]) -> None:
         st.rerun()
 
     if graph_state.get("itinerary_view_ready") and graph_state.get("final_itinerary_markdown"):
-        st.success("Final itinerary is ready.")
+        total_seconds = st.session_state.get("graph_total_seconds")
+        if isinstance(total_seconds, (int, float)):
+            st.success(f"Final itinerary is ready. Generated in {total_seconds:.1f} seconds.")
+        else:
+            st.success("Final itinerary is ready.")
         if st.button("Open itinerary view", key="open_itinerary_view", use_container_width=True):
             st.session_state.view = "itinerary"
             st.rerun()

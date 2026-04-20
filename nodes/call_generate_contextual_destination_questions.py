@@ -7,7 +7,8 @@ from constants.prompts.information_curator_prompts import (
     CONTEXTUAL_DESTINATION_QUESTIONS_SYSTEM_PROMPT,
 )
 from llm import get_llm
-from nodes.call_destination_research import _extract_text_content, _load_json_payload
+from nodes.call_destination_research import CURATOR_REASONING
+from services.llm_response_parsing import extract_text_content, load_json_payload
 
 
 def _clean_text(value, fallback: str = "") -> str:
@@ -119,14 +120,16 @@ def call_generate_contextual_destination_questions(state: dict) -> dict:
         ]
     )
 
-    response = (prompt | get_llm().bind(reasoning={"effort": "medium"})).invoke(
+    llm = get_llm().bind(reasoning=CURATOR_REASONING)
+
+    response = (prompt | llm).invoke(
         {
             "travel_input": json.dumps(travel_input, indent=2),
             "selected_destination": json.dumps(selected_destination, indent=2),
         }
     )
-    content = _extract_text_content(response.content)
-    raw_questions = _load_json_payload(content)
+    content = extract_text_content(response.content)
+    raw_questions = load_json_payload(content)
     questions = _normalize_followup_questions(raw_questions)
 
     updated_state = dict(state)

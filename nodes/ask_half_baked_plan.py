@@ -8,9 +8,9 @@ def ask_half_baked_plan(state: dict) -> dict:
             "type": "half_baked_plan",
             "question": "Do you have any half-baked plan or trip feel in mind?",
             "examples": [
-                "Uttarakhand",
-                "Uttarakhand trekking",
-                "beach with adventure sports",
+                "a specific state or region",
+                "a heritage circuit with easy transfers",
+                "a beach trip with water activities",
                 "cool weather and peaceful nature",
             ],
         }

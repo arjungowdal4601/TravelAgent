@@ -237,6 +237,12 @@ def _render_destination_card(card: dict, index: int) -> bool:
         st.caption(f"Duration: {_truncate_text(card.get('duration_fit', ''), 42)}")
         st.caption(f"Price: {_truncate_text(card.get('estimated_price_range', ''), 42)}")
         st.caption(f"Fit: {_truncate_text(card.get('why_it_fits', ''), 52)}")
+        intent_match = _truncate_text(card.get("intent_match_reason", ""), 58)
+        if intent_match:
+            st.caption(f"Matches: {intent_match}")
+        difference = _truncate_text(card.get("difference_from_rejected", ""), 58)
+        if difference:
+            st.caption(f"Different: {difference}")
         st.caption("Highlights:")
         _render_bullets(card.get("highlights", []), limit=4)
 

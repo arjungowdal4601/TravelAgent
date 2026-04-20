@@ -1,19 +1,16 @@
 import streamlit as st
 
-from nodes.itinerary_artifacts import read_itinerary_artifact
-
-
 def render_itinerary_view() -> None:
     """Render the final itinerary from graph state without mutating graph output."""
     graph_state = st.session_state.graph_state or {}
     final_itinerary = graph_state.get("final_itinerary")
     markdown = graph_state.get("final_itinerary_markdown")
-    full_markdown = read_itinerary_artifact(graph_state.get("final_itinerary_markdown_ref"))
-    if isinstance(full_markdown, str) and full_markdown.strip():
-        markdown = full_markdown
     validation = graph_state.get("itinerary_validation")
 
     st.title("Final Itinerary")
+    total_seconds = st.session_state.get("graph_total_seconds")
+    if isinstance(total_seconds, (int, float)):
+        st.caption(f"Generated in {total_seconds:.1f} seconds")
 
     if not markdown:
         st.info("The final itinerary is not available yet.")

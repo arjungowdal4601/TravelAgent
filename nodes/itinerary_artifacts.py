@@ -1,18 +1,11 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
 
 ARTIFACT_ROOT = Path(".travel_itinerary_artifacts")
-
-
-def make_itinerary_run_id(payload: dict[str, Any]) -> str:
-    """Create a stable short run id for itinerary artifacts."""
-    text = json.dumps(payload, sort_keys=True, default=str)
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
 def write_itinerary_artifact(run_id: str, name: str, payload: Any) -> dict[str, str]:
@@ -55,4 +48,3 @@ def read_itinerary_artifact(ref: dict[str, Any] | str | None) -> Any:
     if artifact_format == "json" or path.suffix.lower() == ".json":
         return json.loads(text)
     return text
-

@@ -1,4 +1,5 @@
 .travel_itinerary_artifacts/
+.travel_research_cache/
 .env
 __pycache__/
 *.py[cod]

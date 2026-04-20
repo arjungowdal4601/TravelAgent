@@ -22,7 +22,11 @@ def await_shortlist_decision(state: dict) -> dict:
     updated_state = dict(state)
 
     if action == "reject":
+        rejected_shortlists = list(state.get("rejected_shortlists") or [])
+        rejected_shortlists.append([dict(card) for card in shortlist_cards])
         updated_state["shortlist_decision"] = "rejected"
+        updated_state["rejected_shortlists"] = rejected_shortlists
+        updated_state["shortlist_attempt_count"] = int(state.get("shortlist_attempt_count") or 1) + 1
         updated_state["selected_destination"] = None
         return updated_state
 

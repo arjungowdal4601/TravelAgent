@@ -75,6 +75,8 @@ def build_shortlist_cards(state: dict) -> dict:
                 item.get("estimated_price_range", "Not specified"),
                 "Not specified",
             ),
+            "intent_match_reason": _clean_text(item.get("intent_match_reason", "")),
+            "difference_from_rejected": _clean_text(item.get("difference_from_rejected", "")),
         }
         shortlist_cards.append(card)
 
