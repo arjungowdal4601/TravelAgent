@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 import time
 from pathlib import Path
 
@@ -27,6 +27,7 @@ from UI.session_state import (
     is_complete_origin_selection,
     reset_app_state,
 )
+from services import streamlit_artifacts
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -60,8 +61,14 @@ def run_app() -> None:
         reset_app_state(location_map)
         st.rerun()
 
+    _ensure_streamlit_artifacts()
+    _render_artifact_location()
+
     graph_state = st.session_state.graph_state or {}
-    has_itinerary = bool(graph_state.get("itinerary_view_ready") and graph_state.get("final_itinerary_markdown"))
+    if _has_final_itinerary(graph_state) and not st.session_state.graph_final_artifacts_written:
+        _write_streamlit_snapshot()
+
+    has_itinerary = _has_final_itinerary(graph_state)
     if has_itinerary:
         _render_view_switcher()
         if st.session_state.view == "itinerary":
@@ -263,6 +270,7 @@ def _render_done_step(location_map: dict[str, list[str]]) -> None:
         st.session_state.graph_error = None
     except Exception as exc:
         st.session_state.graph_error = f"Could not run travel graph: {exc}"
+        _write_streamlit_snapshot()
         st.error(st.session_state.graph_error)
         return
 
@@ -275,6 +283,73 @@ def _render_done_step(location_map: dict[str, list[str]]) -> None:
 
 def _graph_config() -> dict:
     return {"configurable": {"thread_id": st.session_state.graph_thread_id}}
+
+
+def _ensure_streamlit_artifacts() -> dict[str, str]:
+    plan_id = streamlit_artifacts.streamlit_plan_id(st.session_state.graph_thread_id)
+    if (
+        st.session_state.graph_artifacts_initialized_for == plan_id
+        and st.session_state.graph_artifact_paths
+    ):
+        return st.session_state.graph_artifact_paths
+
+    if not st.session_state.graph_artifact_created_at:
+        st.session_state.graph_artifact_created_at = datetime.now(timezone.utc).isoformat()
+
+    try:
+        artifact_paths = streamlit_artifacts.initialize_streamlit_artifacts(
+            st.session_state.graph_thread_id,
+            travel_graph,
+            st.session_state.graph_artifact_created_at,
+        )
+    except Exception as exc:
+        st.session_state.graph_artifact_error = f"Could not initialize output artifacts: {exc}"
+        return {}
+
+    st.session_state.graph_artifacts_initialized_for = plan_id
+    st.session_state.graph_artifact_paths = artifact_paths
+    st.session_state.graph_artifact_error = None
+    return artifact_paths
+
+
+def _write_streamlit_snapshot() -> None:
+    _ensure_streamlit_artifacts()
+    try:
+        graph_state = st.session_state.graph_state or {}
+        if _has_final_itinerary(graph_state) and not st.session_state.graph_final_artifacts_written:
+            st.session_state.graph_artifact_paths = streamlit_artifacts.write_streamlit_final_artifacts(
+                st.session_state.graph_thread_id,
+                graph_state,
+                travel_graph,
+            )
+            st.session_state.graph_final_artifacts_written = True
+
+        st.session_state.graph_artifact_paths = streamlit_artifacts.write_streamlit_snapshot(
+            thread_id=st.session_state.graph_thread_id,
+            step=st.session_state.step,
+            graph_state=graph_state,
+            interrupt=st.session_state.graph_interrupt,
+            error=st.session_state.graph_error,
+            trip_data=st.session_state.trip_data,
+            created_at=st.session_state.graph_artifact_created_at,
+        )
+        st.session_state.graph_artifact_error = None
+    except Exception as exc:
+        st.session_state.graph_artifact_error = f"Could not update output artifacts: {exc}"
+
+
+def _render_artifact_location() -> None:
+    if st.session_state.graph_artifact_error:
+        st.warning(st.session_state.graph_artifact_error)
+        return
+
+    output_dir = (st.session_state.graph_artifact_paths or {}).get("output_dir")
+    if output_dir:
+        st.caption(f"Output folder: {output_dir}")
+
+
+def _has_final_itinerary(graph_state: dict) -> bool:
+    return bool(graph_state.get("itinerary_view_ready") and graph_state.get("final_itinerary_markdown"))
 
 
 def _render_view_switcher() -> None:
@@ -303,6 +378,8 @@ def _sync_graph_result(result: dict | None) -> None:
             st.session_state.graph_interrupt = getattr(first_interrupt, "value", first_interrupt)
     else:
         st.session_state.graph_interrupt = None
+
+    _write_streamlit_snapshot()
 
 
 def _run_graph_with_status(graph_input) -> None:
@@ -364,6 +441,7 @@ def _resume_graph(payload: dict, location_map: dict[str, list[str]]) -> None:
         st.session_state.graph_error = None
     except Exception as exc:
         st.session_state.graph_error = f"Could not resume travel graph: {exc}"
+        _write_streamlit_snapshot()
         st.error(st.session_state.graph_error)
         return
 
@@ -402,6 +480,8 @@ def _render_graph_completion(location_map: dict[str, list[str]]) -> None:
         st.rerun()
 
     if graph_state.get("itinerary_view_ready") and graph_state.get("final_itinerary_markdown"):
+        if not st.session_state.graph_final_artifacts_written:
+            _write_streamlit_snapshot()
         total_seconds = st.session_state.get("graph_total_seconds")
         if isinstance(total_seconds, (int, float)):
             st.success(f"Final itinerary is ready. Generated in {total_seconds:.1f} seconds.")

@@ -85,6 +85,21 @@ def init_state(location_map: dict[str, list[str]]) -> None:
     if "graph_current_status" not in st.session_state:
         st.session_state.graph_current_status = ""
 
+    if "graph_artifact_paths" not in st.session_state:
+        st.session_state.graph_artifact_paths = {}
+
+    if "graph_artifacts_initialized_for" not in st.session_state:
+        st.session_state.graph_artifacts_initialized_for = None
+
+    if "graph_artifact_created_at" not in st.session_state:
+        st.session_state.graph_artifact_created_at = None
+
+    if "graph_final_artifacts_written" not in st.session_state:
+        st.session_state.graph_final_artifacts_written = False
+
+    if "graph_artifact_error" not in st.session_state:
+        st.session_state.graph_artifact_error = None
+
     if "selected_destination" not in st.session_state:
         st.session_state.selected_destination = None
 
@@ -136,6 +151,11 @@ def reset_graph_results() -> None:
     st.session_state.graph_step_timings = []
     st.session_state.graph_total_seconds = None
     st.session_state.graph_current_status = ""
+    st.session_state.graph_artifact_paths = {}
+    st.session_state.graph_artifacts_initialized_for = None
+    st.session_state.graph_artifact_created_at = None
+    st.session_state.graph_final_artifacts_written = False
+    st.session_state.graph_artifact_error = None
 
 
 def reset_app_state(location_map: dict[str, list[str]]) -> None:

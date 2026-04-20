@@ -25,6 +25,8 @@ Core rules:
 - No follow-up questions.
 - No exact price calculation.
 - Return only valid JSON.
+- Use web search only to ground destination fit, season practicality, and route realism.
+- Do not include source names, URLs, citations, citation markers, or website text.
 - Do not default to fixed list sizes.
 - Make place count and highlight count dynamic.
 - Each card must represent a coherent destination concept, not just a geography dump.
@@ -134,6 +136,8 @@ Rules:
 - If the hint names a destination or region, stay focused on that destination,
   that region, or very close semantic matches.
 - If the hint describes a travel feel, every card must share that feel.
+- Use web search only to ground destination fit, season practicality, and route realism.
+- Do not include source names, URLs, citations, citation markers, or website text.
 - Use the rejected shortlist as negative feedback.
 - Do not repeat rejected card titles, regions, or place clusters unless the hint
   explicitly asks for that same idea.

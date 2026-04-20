@@ -8,8 +8,10 @@ from constants.prompts.information_curator_prompts import (
     DESTINATION_RESEARCH_WITH_USER_HINT_HUMAN_PROMPT,
     DESTINATION_RESEARCH_WITH_USER_HINT_SYSTEM_PROMPT,
 )
-from llm import get_llm
-from nodes.call_destination_research import CURATOR_REASONING
+from nodes.call_destination_research import (
+    invoke_curator_prompt,
+    sanitize_shortlist_cards,
+)
 from services.llm_response_parsing import extract_text_content, load_json_payload
 
 
@@ -38,19 +40,19 @@ def call_destination_research_with_user_hint(state: dict) -> dict:
         ]
     )
 
-    llm = get_llm().bind(reasoning=CURATOR_REASONING)
     rejected_summaries = summarize_rejected_shortlists(state.get("rejected_shortlists") or [])
     shortlist_attempt_count = int(state.get("shortlist_attempt_count") or 2)
-    response = (prompt | llm).invoke(
+    response = invoke_curator_prompt(
+        prompt,
         {
             "travel_input": json.dumps(travel_input, indent=2),
             "user_hint": state.get("user_hint", ""),
             "rejected_shortlists": json.dumps(rejected_summaries, indent=2),
             "shortlist_attempt_count": shortlist_attempt_count,
-        }
+        },
     )
     content = extract_text_content(response.content)
-    shortlisted_destinations = load_json_payload(content)
+    shortlisted_destinations = sanitize_shortlist_cards(load_json_payload(content))
 
     if not isinstance(shortlisted_destinations, list) or len(shortlisted_destinations) != 4:
         raise ValueError("The model must return exactly 4 destination groups.")

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 
-OUTPUT_ROOT = Path("output")
+OUTPUT_ROOT = Path(__file__).resolve().parent.parent / "output"
 
 
 def initialize_plan_artifacts(plan_id: str, plan_metadata: dict[str, Any], graph: Any) -> dict[str, str]:
