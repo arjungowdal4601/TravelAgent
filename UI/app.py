@@ -17,11 +17,14 @@ from UI.components import (
 from UI.itinerary_view import render_itinerary_view
 from UI.location_data import load_location_map
 from UI.session_state import (
+    ORIGIN_CITY_PLACEHOLDER,
+    ORIGIN_STATE_PLACEHOLDER,
     add_message,
     build_graph_input,
     ensure_ai_prompt,
     finish_flow,
     init_state,
+    is_complete_origin_selection,
     reset_app_state,
 )
 
@@ -52,6 +55,10 @@ def run_app() -> None:
     location_map = load_location_map(PROJECT_ROOT)
     init_state(location_map)
     ensure_ai_prompt(st.session_state.step)
+
+    if st.button("New Session", key="new_session", use_container_width=True):
+        reset_app_state(location_map)
+        st.rerun()
 
     graph_state = st.session_state.graph_state or {}
     has_itinerary = bool(graph_state.get("itinerary_view_ready") and graph_state.get("final_itinerary_markdown"))
@@ -91,15 +98,28 @@ def run_app() -> None:
 
 def _render_origin_step(location_map: dict[str, list[str]], trip_data: dict) -> None:
     states = list(location_map.keys())
-    selected_state = st.selectbox("Select your state", states, key="origin_state_input")
-    cities = location_map[selected_state]
+    state_options = [ORIGIN_STATE_PLACEHOLDER] + states
+    if st.session_state.get("origin_state_input") not in state_options:
+        st.session_state.origin_state_input = ORIGIN_STATE_PLACEHOLDER
 
-    if st.session_state.get("origin_city_input") not in cities:
-        st.session_state.origin_city_input = cities[0]
+    selected_state = st.selectbox("Select your state", state_options, key="origin_state_input")
+    cities = location_map.get(selected_state, []) if selected_state != ORIGIN_STATE_PLACEHOLDER else []
+    city_options = [ORIGIN_CITY_PLACEHOLDER] + cities
 
-    selected_city = st.selectbox("Select your city or district", cities, key="origin_city_input")
+    if st.session_state.get("origin_city_input") not in city_options:
+        st.session_state.origin_city_input = ORIGIN_CITY_PLACEHOLDER
+
+    selected_city = st.selectbox(
+        "Select your city or district",
+        city_options,
+        key="origin_city_input",
+        disabled=selected_state == ORIGIN_STATE_PLACEHOLDER,
+    )
 
     if st.button("Confirm origin", use_container_width=True):
+        if not is_complete_origin_selection(selected_state, selected_city):
+            st.error("Please select both a state and a city or district.")
+            return
         trip_data["origin_state"] = selected_state
         trip_data["origin_city"] = selected_city
         trip_data["origin"] = f"{selected_city}, {selected_state}"

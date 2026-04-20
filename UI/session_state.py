@@ -4,6 +4,10 @@ from uuid import uuid4
 import streamlit as st
 
 
+ORIGIN_STATE_PLACEHOLDER = "Select state"
+ORIGIN_CITY_PLACEHOLDER = "Select city"
+
+
 STEP_PROMPTS = {
     "ask_origin": "Hi! Let's start your trip. Which Indian state and city or district are you traveling from?",
     "ask_dates": "What is your travel date range? Please select the start and end date together.",
@@ -46,11 +50,10 @@ def init_state(location_map: dict[str, list[str]]) -> None:
         st.session_state.trip_data = _default_trip_data()
 
     if "origin_state_input" not in st.session_state:
-        st.session_state.origin_state_input = next(iter(location_map))
+        st.session_state.origin_state_input = ORIGIN_STATE_PLACEHOLDER
 
     if "origin_city_input" not in st.session_state:
-        default_state = st.session_state.origin_state_input
-        st.session_state.origin_city_input = location_map[default_state][0]
+        st.session_state.origin_city_input = ORIGIN_CITY_PLACEHOLDER
 
     if "date_range_input" not in st.session_state:
         st.session_state.date_range_input = (date.today(), date.today() + timedelta(days=1))
@@ -142,9 +145,8 @@ def reset_app_state(location_map: dict[str, list[str]]) -> None:
     st.session_state.prompted_steps = set()
     st.session_state.trip_data = _default_trip_data()
 
-    default_state = next(iter(location_map))
-    st.session_state.origin_state_input = default_state
-    st.session_state.origin_city_input = location_map[default_state][0]
+    st.session_state.origin_state_input = ORIGIN_STATE_PLACEHOLDER
+    st.session_state.origin_city_input = ORIGIN_CITY_PLACEHOLDER
     st.session_state.date_range_input = (date.today(), date.today() + timedelta(days=1))
     st.session_state.budget_slider_value = 50000
     st.session_state.summary_added = False
@@ -182,6 +184,15 @@ def build_graph_input() -> dict:
         "budget_mode": data["budget_mode"],
         "budget_value": data["budget_value"],
     }
+
+
+def is_complete_origin_selection(state: str | None, city: str | None) -> bool:
+    return bool(
+        state
+        and city
+        and state != ORIGIN_STATE_PLACEHOLDER
+        and city != ORIGIN_CITY_PLACEHOLDER
+    )
 
 
 def finish_flow() -> None:
